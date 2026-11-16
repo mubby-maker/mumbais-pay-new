@@ -119,4 +119,4 @@ export default function App() {
 
             <div style={styles.card}>
               <p>Membership Plan</p>
-              <h3>{profile?.Membership_plan || 'No active
+              <h3>{profile?.Membership_plan || 'No active plan'}</h3>
