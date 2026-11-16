@@ -10,6 +10,15 @@ const TABLES = {
   Rewards: 'daily_reward_claims'
 };
 
+const ORDER_COLUMNS = {
+  Members: 'created_at',
+  Payments: 'created_at',
+  Withdrawals: 'created_at',
+  Referrals: 'created_at',
+  Cycles: 'started_at',
+  Rewards: 'created_at'
+};
+
 const money = value => `$${Number(value || 0).toFixed(2)}`;
 
 export default function AdminPanel() {
@@ -68,10 +77,13 @@ export default function AdminPanel() {
     setMessage('');
 
     try {
+      const table = TABLES[name];
+      const orderColumn = ORDER_COLUMNS[name];
+
       const { data, error } = await supabase
-        .from(TABLES[name])
+        .from(table)
         .select('*')
-        .order('created_at', { ascending: false });
+        .order(orderColumn, { ascending: false });
 
       if (error) throw error;
 
