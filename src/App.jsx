@@ -6,6 +6,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [plans, setPlans] = useState([]);
+  const [rewards, setRewards] = useState([]);
   const [page, setPage] = useState('Dashboard');
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
@@ -19,10 +20,7 @@ export default function App() {
 
       if (!mounted) return;
 
-      if (error) {
-        setError(error.message);
-      }
-
+      if (error) setError(error.message);
       setUser(data.session?.user ?? null);
       setLoading(false);
     }
@@ -30,9 +28,7 @@ export default function App() {
     checkSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
+      (_event, session) => setUser(session?.user ?? null)
     );
 
     return () => {
@@ -42,15 +38,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      loadData();
-    } else {
+    if (user) loadData();
+    else {
       setProfile(null);
       setPlans([]);
+      setRewards([]);
     }
   }, [user]);
 
   async function loadData() {
+    if (!user) return;
+
     setDataLoading(true);
     setError('');
 
@@ -63,7 +61,6 @@ export default function App() {
           .maybeSingle();
 
       if (profileError) throw profileError;
-
       setProfile(profileData);
 
       const { data: planData, error: planError } =
@@ -73,10 +70,19 @@ export default function App() {
           .eq('is_active', true);
 
       if (planError) throw planError;
-
       setPlans(planData || []);
+
+      const { data: rewardData, error: rewardError } =
+        await supabase
+          .from('reward_ledger')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+      if (rewardError) throw rewardError;
+      setRewards(rewardData || []);
     } catch (err) {
-      setError(err.message || 'Could not load your account information.');
+      setError(err.message || 'Could not load account information.');
     } finally {
       setDataLoading(false);
     }
@@ -98,9 +104,7 @@ export default function App() {
     return <div style={styles.center}>Loading Mumbai's Pay...</div>;
   }
 
-  if (!user) {
-    return <Auth onLogin={setUser} />;
-  }
+  if (!user) return <Auth onLogin={setUser} />;
 
   const balance = Number(profile?.reward_balance || 0);
 
@@ -117,10 +121,8 @@ export default function App() {
   return (
     <div style={styles.app}>
       <header style={styles.header}>
-        <h2 style={{ margin: 0 }}>MUMBAI'S PAY</h2>
-        <p style={{ marginBottom: 12 }}>
-          Welcome, {profile?.Username || user.email}
-        </p>
+        <h2>MUMBAI'S PAY</h2>
+        <p>Welcome, {profile?.Username || user.email}</p>
         <button onClick={logout} style={styles.logout}>
           Logout
         </button>
@@ -134,7 +136,7 @@ export default function App() {
             style={{
               ...styles.navButton,
               background: page === item ? '#1768e5' : '#edf1f7',
-              color: page === item ? '#ffffff' : '#26344a'
+              color: page === item ? 'white' : '#26344a'
             }}
           >
             {item}
@@ -143,45 +145,31 @@ export default function App() {
       </nav>
 
       <main style={styles.main}>
-        {error && (
-          <div style={styles.error}>
-            {error}
-          </div>
-        )}
+        {error && <div style={styles.error}>{error}</div>}
 
-        {dataLoading && (
-          <p>Loading your account information...</p>
-        )}
+        {dataLoading && <p>Loading account information...</p>}
 
         {page === 'Dashboard' && (
           <>
             <h2>Dashboard</h2>
 
             <div style={styles.card}>
-              <p style={styles.label}>Available Reward Balance</p>
-              <h1 style={styles.amount}>
-                ${balance.toFixed(2)}
-              </h1>
+              <p>Available Reward Balance</p>
+              <h1 style={styles.amount}>${balance.toFixed(2)}</h1>
             </div>
 
             <div style={styles.card}>
-              <p style={styles.label}>Membership Plan</p>
-              <h3>
-                {profile?.Membership_plan || 'No active plan'}
-              </h3>
-              <p>
-                Status: {profile?.Membership_status || 'Not active'}
-              </p>
+              <p>Membership Plan</p>
+              <h3>{profile?.Membership_plan || 'No active plan'}</h3>
+              <p>Status: {profile?.Membership_status || 'Not active'}</p>
             </div>
 
             <div style={styles.card}>
-              <p style={styles.label}>Referral Code</p>
-              <h3>
-                {profile?.Referral_code || 'Not available'}
-              </h3>
+              <p>Referral Code</p>
+              <h3>{profile?.Referral_code || 'Not available'}</h3>
             </div>
 
-            <button onClick={loadData} style={styles.primaryButton}>
+            <button onClick={loadData} style={styles.button}>
               Refresh Dashboard
             </button>
           </>
@@ -192,28 +180,20 @@ export default function App() {
             <h2>Membership Plans</h2>
 
             {plans.length === 0 && !dataLoading && (
-              <div style={styles.card}>
-                No active membership plans found.
-              </div>
+              <div style={styles.card}>No active plans found.</div>
             )}
 
             {plans.map(plan => (
               <div style={styles.card} key={plan.id}>
                 <h3>{plan.name}</h3>
-                <p>
-                  Registration Fee: ${plan.registration_fee}
-                </p>
-                <p>
-                  Daily Reward: ${plan.daily_reward}
-                </p>
-                <p>
-                  Duration: {plan.duration_days} days
-                </p>
+                <p>Registration Fee: ${plan.registration_fee}</p>
+                <p>Daily Reward: ${plan.daily_reward}</p>
+                <p>Duration: {plan.duration_days} days</p>
                 <button
-                  style={styles.primaryButton}
-                  onClick={() => {
-                    alert('Membership payment is not connected yet.');
-                  }}
+                  style={styles.button}
+                  onClick={() =>
+                    alert('Membership payment is not connected yet.')
+                  }
                 >
                   Select Plan
                 </button>
@@ -222,14 +202,57 @@ export default function App() {
           </>
         )}
 
-        {page !== 'Dashboard' && page !== 'Membership' && (
+        {page === 'Daily Rewards' && (
           <>
-            <h2>{page}</h2>
+            <h2>Daily Rewards</h2>
+
             <div style={styles.card}>
-              <p>This section is not connected yet.</p>
+              <p>Current Reward Balance</p>
+              <h1 style={styles.amount}>${balance.toFixed(2)}</h1>
+              <p>
+                Daily rewards are credited automatically when your
+                membership is eligible. No manual claim is required.
+              </p>
             </div>
+
+            <div style={styles.card}>
+              <h3>Reward History</h3>
+
+              {rewards.length === 0 ? (
+                <p>No reward transactions recorded yet.</p>
+              ) : (
+                rewards.map((reward, index) => (
+                  <div key={reward.id || index} style={styles.rewardRow}>
+                    <div>
+                      <strong>{reward.description || 'Reward credit'}</strong>
+                      <p style={styles.date}>
+                        {reward.created_at
+                          ? new Date(reward.created_at).toLocaleString()
+                          : ''}
+                      </p>
+                    </div>
+                    <strong style={styles.amountSmall}>
+                      ${Number(reward.amount || 0).toFixed(2)}
+                    </strong>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button onClick={loadData} style={styles.button}>
+              Refresh Rewards
+            </button>
           </>
         )}
+
+        {page !== 'Dashboard' &&
+          page !== 'Membership' &&
+          page !== 'Daily Rewards' && (
+            <div style={styles.card}>
+              <h2>{page}</h2>
+              <p>This section is the next part we will build.</p>
+            </div>
+          )}
       </main>
     </div>
   );
@@ -245,33 +268,30 @@ const styles = {
   center: {
     minHeight: '100vh',
     display: 'grid',
-    placeItems: 'center',
-    fontFamily: 'Arial, sans-serif'
+    placeItems: 'center'
   },
   header: {
     background: '#101827',
-    color: '#ffffff',
+    color: 'white',
     padding: 22
   },
   logout: {
-    padding: '10px 18px',
+    padding: 10,
     border: 0,
-    borderRadius: 7,
-    cursor: 'pointer'
+    borderRadius: 7
   },
   nav: {
     display: 'flex',
     gap: 8,
     padding: 12,
     overflowX: 'auto',
-    background: '#ffffff'
+    background: 'white'
   },
   navButton: {
     padding: 11,
     border: 0,
     borderRadius: 8,
-    whiteSpace: 'nowrap',
-    cursor: 'pointer'
+    whiteSpace: 'nowrap'
   },
   main: {
     padding: 18,
@@ -279,35 +299,44 @@ const styles = {
     margin: '0 auto'
   },
   card: {
-    background: '#ffffff',
+    background: 'white',
     padding: 20,
     borderRadius: 13,
     marginTop: 15,
     boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-  },
-  label: {
-    color: '#64748b',
-    marginBottom: 8
   },
   amount: {
     color: '#1768e5',
     fontSize: 32,
     margin: 0
   },
-  primaryButton: {
+  amountSmall: {
+    color: '#16834a'
+  },
+  date: {
+    color: '#64748b',
+    fontSize: 12
+  },
+  rewardRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    borderBottom: '1px solid #eee',
+    padding: '12px 0'
+  },
+  button: {
     background: '#1768e5',
-    color: '#ffffff',
+    color: 'white',
     padding: '12px 18px',
     border: 0,
     borderRadius: 8,
-    marginTop: 10,
-    cursor: 'pointer'
+    marginTop: 10
   },
   error: {
     color: '#a40000',
     background: '#ffeaea',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 15
+    borderRadius: 8
   }
 };
