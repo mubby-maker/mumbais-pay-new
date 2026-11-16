@@ -397,7 +397,7 @@ export default function App() {
                   )}
                 </div>
               );
-            }}
+                          })}
 
             <div style={styles.card}>
               <h3>My Activity Submissions</h3>
