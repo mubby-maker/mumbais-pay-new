@@ -7,6 +7,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [plans, setPlans] = useState([]);
   const [rewards, setRewards] = useState([]);
+  const [referrals, setReferrals] = useState([]);
   const [page, setPage] = useState('Dashboard');
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
@@ -38,11 +39,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) loadData();
-    else {
+    if (user) {
+      loadData();
+    } else {
       setProfile(null);
       setPlans([]);
       setRewards([]);
+      setReferrals([]);
     }
   }, [user]);
 
@@ -81,6 +84,17 @@ export default function App() {
 
       if (rewardError) throw rewardError;
       setRewards(rewardData || []);
+
+      const { data: referralData, error: referralError } =
+        await supabase
+          .from('referral_rewards')
+          .select('*')
+          .eq('referrer_user_id', user.id)
+          .order('created_at', { ascending: false });
+
+      if (referralError) throw referralError;
+      setReferrals(referralData || []);
+
     } catch (err) {
       setError(err.message || 'Could not load account information.');
     } finally {
@@ -100,6 +114,22 @@ export default function App() {
     setProfile(null);
   }
 
+  async function copyReferralCode() {
+    const code = profile?.Referral_code;
+
+    if (!code) {
+      alert('Your referral code is not available yet.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      alert('Referral code copied!');
+    } catch {
+      alert('Please copy your referral code manually: ' + code);
+    }
+  }
+
   if (loading) {
     return <div style={styles.center}>Loading Mumbai's Pay...</div>;
   }
@@ -107,6 +137,11 @@ export default function App() {
   if (!user) return <Auth onLogin={setUser} />;
 
   const balance = Number(profile?.reward_balance || 0);
+
+  const referralTotal = referrals.reduce(
+    (total, item) => total + Number(item.amount || 0),
+    0
+  );
 
   const menu = [
     'Dashboard',
@@ -210,8 +245,8 @@ export default function App() {
               <p>Current Reward Balance</p>
               <h1 style={styles.amount}>${balance.toFixed(2)}</h1>
               <p>
-                Daily rewards are credited automatically when your
-                membership is eligible. No manual claim is required.
+                Eligible daily rewards are credited automatically.
+                No manual claim is required.
               </p>
             </div>
 
@@ -224,7 +259,9 @@ export default function App() {
                 rewards.map((reward, index) => (
                   <div key={reward.id || index} style={styles.rewardRow}>
                     <div>
-                      <strong>{reward.description || 'Reward credit'}</strong>
+                      <strong>
+                        {reward.description || 'Reward credit'}
+                      </strong>
                       <p style={styles.date}>
                         {reward.created_at
                           ? new Date(reward.created_at).toLocaleString()
@@ -245,14 +282,67 @@ export default function App() {
           </>
         )}
 
-        {page !== 'Dashboard' &&
-          page !== 'Membership' &&
-          page !== 'Daily Rewards' && (
+        {page === 'Referrals' && (
+          <>
+            <h2>My Referrals</h2>
+
             <div style={styles.card}>
-              <h2>{page}</h2>
-              <p>This section is the next part we will build.</p>
+              <p>Your Referral Code</p>
+              <h2>{profile?.Referral_code || 'Not available'}</h2>
+              <p>Share this code with people you invite.</p>
+              <button
+                style={styles.button}
+                onClick={copyReferralCode}
+              >
+                Copy Referral Code
+              </button>
             </div>
-          )}
+
+            <div style={styles.card}>
+              <h3>Referral Earnings</h3>
+              <h2 style={styles.amount}>
+                ${referralTotal.toFixed(2)}
+              </h2>
+              <p>Program referral bonus: $0.50 per eligible referral.</p>
+            </div>
+
+            <div style={styles.card}>
+              <h3>Eligible Referrals</h3>
+              <h2>{referrals.length}</h2>
+
+              {referrals.length === 0 ? (
+                <p>No referral rewards recorded yet.</p>
+              ) : (
+                referrals.map(item => (
+                  <div key={item.id} style={styles.rewardRow}>
+                    <span>
+                      Referred member: {item.referred_user_id}
+                    </span>
+                    <strong>
+                      ${Number(item.amount || 0).toFixed(2)}
+                    </strong>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button onClick={loadData} style={styles.button}>
+              Refresh Referrals
+            </button>
+          </>
+        )}
+
+        {![
+          'Dashboard',
+          'Membership',
+          'Daily Rewards',
+          'Referrals'
+        ].includes(page) && (
+          <div style={styles.card}>
+            <h2>{page}</h2>
+            <p>This section is not connected yet.</p>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -323,7 +413,8 @@ const styles = {
     alignItems: 'center',
     gap: 12,
     borderBottom: '1px solid #eee',
-    padding: '12px 0'
+    padding: '12px 0',
+    overflowWrap: 'anywhere'
   },
   button: {
     background: '#1768e5',
