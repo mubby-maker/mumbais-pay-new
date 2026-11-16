@@ -1,6 +1,6 @@
-import AdminPanel from './AdminPanel';
 import React, { useEffect, useState } from 'react';
 import Auth from './Auth';
+import AdminPanel from './AdminPanel';
 import { supabase } from './supabase';
 
 export default function App() {
@@ -154,6 +154,7 @@ export default function App() {
     }
     setUser(null);
     setProfile(null);
+    setPage('Dashboard');
   }
 
   async function copyReferralCode() {
@@ -183,14 +184,21 @@ export default function App() {
   );
 
   const menu = [
-    'Dashboard', 'Membership', 'Daily Rewards',
-    'Referrals', 'Wallet', 'Withdrawals', 'Activities'
+    'Dashboard',
+    'Membership',
+    'Daily Rewards',
+    'Referrals',
+    'Wallet',
+    'Withdrawals',
+    'Activities',
+    'Admin'
   ];
 
   function activityStatus(activityId) {
     return completions.find(
-      item => item.activity_id === activityId &&
-      (item.status === 'pending' || item.status === 'approved')
+      item =>
+        item.activity_id === activityId &&
+        (item.status === 'pending' || item.status === 'approved')
     );
   }
 
@@ -220,7 +228,10 @@ export default function App() {
 
       <main style={styles.main}>
         {error && <div style={styles.error}>{error}</div>}
-        {dataLoading && <p>Loading account information...</p>}
+
+        {dataLoading && page !== 'Admin' && (
+          <p>Loading account information...</p>
+        )}
 
         {page === 'Dashboard' && (
           <>
@@ -273,7 +284,7 @@ export default function App() {
             <div style={styles.card}>
               <p>Current Reward Balance</p>
               <h1 style={styles.amount}>${balance.toFixed(2)}</h1>
-              <p>Eligible daily rewards are credited automatically.</p>
+              <p>Eligible rewards are recorded in your account.</p>
             </div>
             <div style={styles.card}>
               <h3>Reward History</h3>
@@ -312,7 +323,7 @@ export default function App() {
             <div style={styles.card}>
               <h3>Referral Earnings</h3>
               <h2 style={styles.amount}>${referralTotal.toFixed(2)}</h2>
-              <p>Program referral bonus: $0.50 per eligible referral.</p>
+              <p>Referral rewards are subject to verification.</p>
             </div>
             <div style={styles.card}>
               <h3>Eligible Referrals: {referrals.length}</h3>
@@ -387,7 +398,9 @@ export default function App() {
                   {submission?.status === 'approved' ? (
                     <p style={styles.approved}>Approved</p>
                   ) : submission?.status === 'pending' ? (
-                    <p style={styles.pending}>Waiting for admin approval</p>
+                    <p style={styles.pending}>
+                      Waiting for admin approval
+                    </p>
                   ) : (
                     <button
                       style={styles.button}
@@ -398,7 +411,7 @@ export default function App() {
                   )}
                 </div>
               );
-                          })}
+            })}
 
             <div style={styles.card}>
               <h3>My Activity Submissions</h3>
@@ -424,12 +437,14 @@ export default function App() {
           </>
         )}
 
-        {['Withdrawals'].includes(page) && (
+        {page === 'Withdrawals' && (
           <div style={styles.card}>
-            <h2>{page}</h2>
+            <h2>Withdrawals</h2>
             <p>This section is not connected yet.</p>
           </div>
         )}
+
+        {page === 'Admin' && <AdminPanel />}
       </main>
     </div>
   );
