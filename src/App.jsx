@@ -1,3 +1,4 @@
+import AdminPanel from './AdminPanel';
 import React, { useEffect, useState } from 'react';
 import Auth from './Auth';
 import { supabase } from './supabase';
