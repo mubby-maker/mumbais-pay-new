@@ -39,6 +39,15 @@ const styles = {
     fontWeight: 'bold',
     cursor: 'pointer',
   },
+  secondaryButton: {
+    background: '#fff',
+    color: '#147d55',
+    border: '1px solid #147d55',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  },
   input: {
     width: '100%',
     boxSizing: 'border-box',
@@ -100,13 +109,17 @@ function App() {
   const [withdrawNetwork, setWithdrawNetwork] = useState('TRC20');
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [authMode, setAuthMode] = useState(null);
+  const [referralMessage, setReferralMessage] = useState('');
 
   useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (!mounted) return;
+
       if (sessionError) setError(sessionError.message);
+
       setUser(data.session?.user || null);
       setLoading(false);
     });
@@ -187,6 +200,7 @@ function App() {
     setReferrals(results[5].data || []);
 
     const settingMap = {};
+
     (results[6].data || []).forEach(item => {
       settingMap[item.key] = item.value;
     });
@@ -288,6 +302,7 @@ function App() {
   }
 
   const balance = Number(profile?.reward_balance || 0);
+
   const activeCycle = cycles.find(c => c.status === 'active') || null;
 
   const activePlan = activeCycle
@@ -329,6 +344,52 @@ function App() {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  const referralCode = profile?.Referral_code || '';
+
+  const referralLink = referralCode
+    ? `${window.location.origin}/?ref=${encodeURIComponent(referralCode)}`
+    : '';
+
+  async function copyReferralLink() {
+    if (!referralLink) {
+      setReferralMessage('Your referral link is not available yet.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(referralLink);
+      setReferralMessage('Referral link copied successfully!');
+    } catch {
+      setReferralMessage('Copy is unavailable in this browser. Please copy the link manually.');
+    }
+  }
+
+  async function shareReferralLink() {
+    if (!referralLink) {
+      setReferralMessage('Your referral link is not available yet.');
+      return;
+    }
+
+    const shareData = {
+      title: 'Join Mumbai’s Pay',
+      text: 'Join me on Mumbai’s Pay. Register using my referral link:',
+      url: referralLink
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setReferralMessage('Share window opened.');
+      } catch (shareError) {
+        if (shareError.name !== 'AbortError') {
+          setReferralMessage('Unable to open the share window. You can copy your link instead.');
+        }
+      }
+    } else {
+      await copyReferralLink();
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ ...styles.app, padding: '40px', textAlign: 'center' }}>
@@ -338,27 +399,222 @@ function App() {
   }
 
   if (!user) {
+    if (authMode) {
+      return (
+        <div style={styles.app}>
+          <header style={styles.header}>
+            <h1 style={{ margin: 0 }}>Mumbai’s Pay</h1>
+            <p style={{ marginBottom: 0 }}>Membership rewards platform</p>
+          </header>
+
+          <main style={styles.container}>
+            <Auth
+              initialMode={authMode}
+              onLogin={setUser}
+              onBack={() => setAuthMode(null)}
+            />
+          </main>
+        </div>
+      );
+    }
+
+    const referralFromUrl =
+      new URLSearchParams(window.location.search).get('ref') ||
+      new URLSearchParams(window.location.search).get('referral_code');
+
     return (
       <div style={styles.app}>
         <header style={styles.header}>
-          <h1 style={{ margin: 0 }}>Mumbai’s Pay</h1>
-          <p style={{ marginBottom: 0 }}>Membership rewards platform</p>
+          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <h1 style={{ margin: 0, fontSize: '30px' }}>
+              Mumbai’s Pay
+            </h1>
+            <p style={{ marginBottom: 0 }}>
+              Membership rewards platform
+            </p>
+          </div>
         </header>
 
         <main style={styles.container}>
-          <section style={styles.card}>
-            <h2>Welcome to Mumbai’s Pay</h2>
-            <p>
-              Create an account or sign in to access your membership,
-              rewards, referrals and withdrawal requests.
+          <section style={{
+            ...styles.card,
+            textAlign: 'center',
+            padding: '35px 20px'
+          }}>
+            <h1 style={{ fontSize: '30px', color: '#101c35' }}>
+              Welcome to Mumbai’s Pay
+            </h1>
+
+            <p style={{ lineHeight: 1.7 }}>
+              Create an account to access membership plans,
+              daily reward cycles, referrals and withdrawal requests.
             </p>
-            <p style={styles.muted}>
-              Membership payments and withdrawals are subject to review
-              and the programme’s terms.
+
+            {referralFromUrl && (
+              <p style={{
+                background: '#e9f7ef',
+                color: '#126b45',
+                padding: '12px',
+                borderRadius: '8px'
+              }}>
+                You arrived through a referral link.
+                Your referral code will be applied during registration.
+              </p>
+            )}
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              marginTop: '24px'
+            }}>
+              <button
+                type="button"
+                style={styles.button}
+                onClick={() => setAuthMode('signup')}
+              >
+                Register
+              </button>
+
+              <button
+                type="button"
+                style={styles.secondaryButton}
+                onClick={() => setAuthMode('login')}
+              >
+                Login
+              </button>
+            </div>
+          </section>
+
+          <section style={styles.card}>
+            <h2>What is Mumbai’s Pay?</h2>
+            <p style={{ lineHeight: 1.7 }}>
+              Mumbai’s Pay is a membership platform where registered
+              members can access the programme features associated
+              with their approved membership.
             </p>
           </section>
 
-          <Auth onLogin={setUser} />
+          <section style={styles.card}>
+            <h2>Membership plans</h2>
+
+            <div style={{
+              border: '1px solid #dce2e9',
+              borderRadius: '10px',
+              padding: '15px',
+              marginBottom: '12px'
+            }}>
+              <h3>Standard Plan</h3>
+              <p>Registration fee: <strong>$1</strong></p>
+              <p>Listed daily reward: <strong>$1</strong></p>
+              <p>Listed duration: <strong>30 days</strong></p>
+            </div>
+
+            <div style={{
+              border: '1px solid #dce2e9',
+              borderRadius: '10px',
+              padding: '15px'
+            }}>
+              <h3>Premium Plan</h3>
+              <p>Registration fee: <strong>$5</strong></p>
+              <p>Listed daily reward: <strong>$7</strong></p>
+              <p>Listed duration: <strong>15 days</strong></p>
+            </div>
+
+            <p style={styles.muted}>
+              These are the listed programme terms. Rewards are subject
+              to the programme rules, available funding and actual
+              processing. They are not guaranteed investment returns.
+            </p>
+          </section>
+
+          <section style={styles.card}>
+            <h2>How it works</h2>
+
+            <p><strong>1. Register</strong></p>
+            <p style={styles.muted}>
+              Create your account with your username, email and password.
+            </p>
+
+            <p><strong>2. Choose a membership</strong></p>
+            <p style={styles.muted}>
+              Review the available plans and select the one you want.
+            </p>
+
+            <p><strong>3. Submit payment details</strong></p>
+            <p style={styles.muted}>
+              Submit your USDT transaction hash and select TRC20 or BEP20.
+              Membership activation follows admin review and approval.
+            </p>
+
+            <p><strong>4. View your rewards</strong></p>
+            <p style={styles.muted}>
+              Approved members can view their reward cycle and wallet
+              balance from their dashboard.
+            </p>
+
+            <p><strong>5. Request a withdrawal</strong></p>
+            <p style={styles.muted}>
+              Submit a withdrawal request when you meet the minimum
+              withdrawal requirement. Requests are reviewed manually.
+            </p>
+          </section>
+
+          <section style={styles.card}>
+            <h2>Referral programme</h2>
+            <p style={{ lineHeight: 1.7 }}>
+              Members can share their personal referral link with others.
+              Referral rewards are subject to the programme’s verification
+              process and applicable terms.
+            </p>
+            <p>
+              Listed referral bonus: <strong>$0.50</strong>
+            </p>
+          </section>
+
+          <section style={styles.card}>
+            <h2>Withdrawals</h2>
+            <p style={{ lineHeight: 1.7 }}>
+              Members can request withdrawals in USDT using TRC20 or BEP20.
+              The listed minimum withdrawal is $10. All requests are
+              subject to review and processing.
+            </p>
+          </section>
+
+          <section style={{
+            ...styles.card,
+            textAlign: 'center'
+          }}>
+            <h2>Ready to get started?</h2>
+            <p style={styles.muted}>
+              Create an account or sign in to access your dashboard.
+            </p>
+
+            <button
+              type="button"
+              style={styles.button}
+              onClick={() => setAuthMode('signup')}
+            >
+              Create Account
+            </button>
+
+            <p style={{ marginTop: '15px' }}>
+              Already registered?{' '}
+              <button
+                type="button"
+                onClick={() => setAuthMode('login')}
+                style={{
+                  border: 0,
+                  background: 'none',
+                  color: '#147d55',
+                  fontWeight: 'bold'
+                }}
+              >
+                Login
+              </button>
+            </p>
+          </section>
         </main>
       </div>
     );
@@ -395,6 +651,7 @@ function App() {
                 setPage(item);
                 setError('');
                 setNotice('');
+                setReferralMessage('');
               }}
               style={{
                 ...styles.navButton,
@@ -404,6 +661,7 @@ function App() {
               {item}
             </button>
           ))}
+
           <button
             type="button"
             onClick={signOut}
@@ -438,36 +696,51 @@ function App() {
             <section style={styles.card}>
               <h2>Dashboard</h2>
               <p style={styles.muted}>Available reward balance</p>
+
               <h1 style={{ fontSize: '36px', color: '#147d55' }}>
                 {money(balance)}
               </h1>
+
               <p>
-                Membership status: <strong>{profile?.Membership_status || 'Not active'}</strong>
+                Membership status:{' '}
+                <strong>
+                  {profile?.Membership_status || 'Not active'}
+                </strong>
               </p>
+
               <p>
-                Membership plan: <strong>{profile?.Membership_plan || 'None'}</strong>
+                Membership plan:{' '}
+                <strong>
+                  {profile?.Membership_plan || 'None'}
+                </strong>
               </p>
             </section>
 
             <section style={styles.card}>
               <h3>Membership reward cycle</h3>
+
               {activeCycle && activePlan ? (
                 <>
                   <p>
                     Active plan: <strong>{activePlan.name}</strong>
                   </p>
+
                   <p>
-                    Daily reward: <strong>{money(activePlan.daily_reward)}</strong>
+                    Daily reward:{' '}
+                    <strong>{money(activePlan.daily_reward)}</strong>
                   </p>
+
                   <p>
-                    Rewards credited: <strong>{cycleClaims.length}</strong>
+                    Rewards credited:{' '}
+                    <strong>{cycleClaims.length}</strong>
                   </p>
-                  <p>
-                    Time until next scheduled reward:
-                  </p>
+
+                  <p>Time until next scheduled reward:</p>
+
                   <h2 style={{ color: '#147d55' }}>
                     {formatTime(remainingMs)}
                   </h2>
+
                   <div style={{
                     height: '10px',
                     background: '#e5eaf0',
@@ -480,6 +753,7 @@ function App() {
                       background: '#147d55'
                     }} />
                   </div>
+
                   <p style={styles.muted}>
                     Rewards are processed automatically by the system.
                     The countdown is an estimate of the next scheduled cycle.
@@ -495,9 +769,11 @@ function App() {
 
             <section style={styles.card}>
               <h3>Referral code</h3>
+
               <p style={{ fontSize: '20px', fontWeight: 'bold' }}>
                 {profile?.Referral_code || 'Not available'}
               </p>
+
               <p style={styles.muted}>
                 Referral bonus: {money(settings.referral_bonus || 0.5)}
               </p>
@@ -509,6 +785,7 @@ function App() {
           <>
             <section style={styles.card}>
               <h2>Membership plans</h2>
+
               <p style={styles.muted}>
                 Review the plan terms before making a payment.
                 Payment approval is handled manually by the admin.
@@ -529,9 +806,22 @@ function App() {
                   }}
                 >
                   <h3>{plan.name}</h3>
-                  <p>Registration fee: <strong>{money(plan.registration_fee)}</strong></p>
-                  <p>Listed daily reward: <strong>{money(plan.daily_reward)}</strong></p>
-                  <p>Plan duration: <strong>{plan.duration_days} days</strong></p>
+
+                  <p>
+                    Registration fee:{' '}
+                    <strong>{money(plan.registration_fee)}</strong>
+                  </p>
+
+                  <p>
+                    Listed daily reward:{' '}
+                    <strong>{money(plan.daily_reward)}</strong>
+                  </p>
+
+                  <p>
+                    Plan duration:{' '}
+                    <strong>{plan.duration_days} days</strong>
+                  </p>
+
                   <button
                     type="button"
                     style={styles.button}
@@ -548,8 +838,10 @@ function App() {
 
             <section style={styles.card}>
               <h3>Submit membership payment</h3>
+
               <form onSubmit={submitPayment}>
                 <label style={styles.label}>Selected plan</label>
+
                 <select
                   style={styles.input}
                   value={selectedPlan}
@@ -557,6 +849,7 @@ function App() {
                   required
                 >
                   <option value="">Choose a plan</option>
+
                   {plans.map(plan => (
                     <option key={plan.id} value={plan.id}>
                       {plan.name} — {money(plan.registration_fee)}
@@ -565,6 +858,7 @@ function App() {
                 </select>
 
                 <label style={styles.label}>Payment network</label>
+
                 <select
                   style={styles.input}
                   value={paymentNetwork}
@@ -575,6 +869,7 @@ function App() {
                 </select>
 
                 <label style={styles.label}>Transaction hash</label>
+
                 <input
                   style={styles.input}
                   value={transactionHash}
@@ -601,24 +896,41 @@ function App() {
 
             {activeCycle && activePlan ? (
               <>
-                <p>Active plan: <strong>{activePlan.name}</strong></p>
-                <p>Daily reward amount: <strong>{money(activePlan.daily_reward)}</strong></p>
-                <p>Rewards credited in this cycle: <strong>{cycleClaims.length}</strong></p>
+                <p>
+                  Active plan: <strong>{activePlan.name}</strong>
+                </p>
+
+                <p>
+                  Daily reward amount:{' '}
+                  <strong>{money(activePlan.daily_reward)}</strong>
+                </p>
+
+                <p>
+                  Rewards credited in this cycle:{' '}
+                  <strong>{cycleClaims.length}</strong>
+                </p>
+
                 <h2 style={{ color: '#147d55' }}>
                   {formatTime(remainingMs)}
                 </h2>
+
                 <p style={styles.muted}>
                   The reward process runs automatically. You do not need
                   to submit daily proof or click a claim button.
                 </p>
               </>
             ) : (
-              <p>You need an approved active membership to receive cycle rewards.</p>
+              <p>
+                You need an approved active membership to receive cycle rewards.
+              </p>
             )}
 
             <h3>Reward history</h3>
+
             {claims.length === 0 ? (
-              <p style={styles.muted}>No daily rewards have been recorded yet.</p>
+              <p style={styles.muted}>
+                No daily rewards have been recorded yet.
+              </p>
             ) : (
               claims.map(claim => (
                 <div
@@ -629,6 +941,7 @@ function App() {
                   }}
                 >
                   <strong>{money(claim.amount)}</strong>
+
                   <div style={styles.muted}>
                     {claim.reward_date || claim.created_at}
                   </div>
@@ -641,20 +954,73 @@ function App() {
         {page === 'Referrals' && (
           <section style={styles.card}>
             <h2>Referrals</h2>
+
             <p>Your referral code:</p>
+
             <h2 style={{ color: '#147d55' }}>
-              {profile?.Referral_code || 'Not available'}
+              {referralCode || 'Not available'}
             </h2>
+
             <p style={styles.muted}>
-              Share this code with people who register. Referral rewards
-              are subject to the programme’s verification process.
+              Share your personal referral link with people who want
+              to register on Mumbai’s Pay.
             </p>
+
+            <label style={styles.label}>Your personal referral link</label>
+
+            <input
+              style={styles.input}
+              value={referralLink}
+              readOnly
+              placeholder="Your referral link will appear here"
+            />
+
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '10px',
+              marginBottom: '15px'
+            }}>
+              <button
+                type="button"
+                style={styles.button}
+                onClick={copyReferralLink}
+                disabled={!referralLink}
+              >
+                Copy Link
+              </button>
+
+              <button
+                type="button"
+                style={styles.secondaryButton}
+                onClick={shareReferralLink}
+                disabled={!referralLink}
+              >
+                Share Link
+              </button>
+            </div>
+
+            {referralMessage && (
+              <p style={{ color: '#147d55', fontSize: '14px' }}>
+                {referralMessage}
+              </p>
+            )}
+
             <p>
-              Referral bonus setting: <strong>{money(settings.referral_bonus || 0.5)}</strong>
+              Referral bonus setting:{' '}
+              <strong>{money(settings.referral_bonus || 0.5)}</strong>
             </p>
+
+            <p style={styles.muted}>
+              Referral rewards are subject to the programme’s verification process.
+            </p>
+
             <h3>Referral rewards</h3>
+
             {referrals.length === 0 ? (
-              <p style={styles.muted}>No referral rewards recorded yet.</p>
+              <p style={styles.muted}>
+                No referral rewards recorded yet.
+              </p>
             ) : (
               referrals.map(item => (
                 <div
@@ -665,7 +1031,10 @@ function App() {
                   }}
                 >
                   <strong>{money(item.amount)}</strong>
-                  <div style={styles.muted}>{item.created_at}</div>
+
+                  <div style={styles.muted}>
+                    {item.created_at}
+                  </div>
                 </div>
               ))
             )}
@@ -675,10 +1044,17 @@ function App() {
         {page === 'Wallet' && (
           <section style={styles.card}>
             <h2>Wallet</h2>
-            <h1 style={{ color: '#147d55' }}>{money(balance)}</h1>
+
+            <h1 style={{ color: '#147d55' }}>
+              {money(balance)}
+            </h1>
+
             <h3>Transaction history</h3>
+
             {ledger.length === 0 ? (
-              <p style={styles.muted}>No wallet transactions yet.</p>
+              <p style={styles.muted}>
+                No wallet transactions yet.
+              </p>
             ) : (
               ledger.map(item => (
                 <div
@@ -689,8 +1065,12 @@ function App() {
                   }}
                 >
                   <strong>{money(item.amount)}</strong>
+
                   <div>{item.description}</div>
-                  <div style={styles.muted}>{item.created_at}</div>
+
+                  <div style={styles.muted}>
+                    {item.created_at}
+                  </div>
                 </div>
               ))
             )}
@@ -701,13 +1081,19 @@ function App() {
           <>
             <section style={styles.card}>
               <h2>Request withdrawal</h2>
-              <p>Available balance: <strong>{money(balance)}</strong></p>
+
               <p>
-                Minimum withdrawal: <strong>{money(settings.minimum_withdrawal || 10)}</strong>
+                Available balance: <strong>{money(balance)}</strong>
+              </p>
+
+              <p>
+                Minimum withdrawal:{' '}
+                <strong>{money(settings.minimum_withdrawal || 10)}</strong>
               </p>
 
               <form onSubmit={submitWithdrawal}>
                 <label style={styles.label}>Amount (USD)</label>
+
                 <input
                   style={styles.input}
                   type="number"
@@ -719,6 +1105,7 @@ function App() {
                 />
 
                 <label style={styles.label}>Network</label>
+
                 <select
                   style={styles.input}
                   value={withdrawNetwork}
@@ -729,6 +1116,7 @@ function App() {
                 </select>
 
                 <label style={styles.label}>USDT wallet address</label>
+
                 <input
                   style={styles.input}
                   value={withdrawWallet}
@@ -749,8 +1137,11 @@ function App() {
 
             <section style={styles.card}>
               <h3>Withdrawal history</h3>
+
               {withdrawals.length === 0 ? (
-                <p style={styles.muted}>No withdrawal requests yet.</p>
+                <p style={styles.muted}>
+                  No withdrawal requests yet.
+                </p>
               ) : (
                 withdrawals.map(item => (
                   <div
@@ -761,7 +1152,9 @@ function App() {
                     }}
                   >
                     <strong>{money(item.amount)}</strong>
+
                     <div>Status: {item.status}</div>
+
                     <div style={styles.muted}>
                       {item.network} · {item.created_at}
                     </div>
