@@ -8,6 +8,8 @@ export default function App() {
   const [plans, setPlans] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [referrals, setReferrals] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [completions, setCompletions] = useState([]);
   const [page, setPage] = useState('Dashboard');
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
@@ -43,6 +45,8 @@ export default function App() {
       setPlans([]);
       setRewards([]);
       setReferrals([]);
+      setActivities([]);
+      setCompletions([]);
     }
   }, [user]);
 
@@ -87,11 +91,58 @@ export default function App() {
 
       if (referralError) throw referralError;
       setReferrals(referralData || []);
+
+      const { data: activityData, error: activityError } =
+        await supabase.from('activities')
+          .select('*')
+          .eq('is_actice', true)
+          .order('created_at', { ascending: false });
+
+      if (activityError) throw activityError;
+      setActivities(activityData || []);
+
+      const { data: completionData, error: completionError } =
+        await supabase.from('activity_completions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+      if (completionError) throw completionError;
+      setCompletions(completionData || []);
     } catch (err) {
       setError(err.message || 'Could not load account information.');
     } finally {
       setDataLoading(false);
     }
+  }
+
+  async function submitActivity(activityId) {
+    const alreadySubmitted = completions.some(
+      item =>
+        item.activity_id === activityId &&
+        (item.status === 'pending' || item.status === 'approved')
+    );
+
+    if (alreadySubmitted) {
+      alert('You have already submitted this activity.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('activity_completions')
+      .insert({
+        user_id: user.id,
+        activity_id: activityId,
+        status: 'pending'
+      });
+
+    if (error) {
+      alert('Could not submit activity: ' + error.message);
+      return;
+    }
+
+    alert('Activity submitted. It is waiting for admin approval.');
+    await loadData();
   }
 
   async function logout() {
@@ -134,6 +185,13 @@ export default function App() {
     'Dashboard', 'Membership', 'Daily Rewards',
     'Referrals', 'Wallet', 'Withdrawals', 'Activities'
   ];
+
+  function activityStatus(activityId) {
+    return completions.find(
+      item => item.activity_id === activityId &&
+      (item.status === 'pending' || item.status === 'approved')
+    );
+  }
 
   return (
     <div style={styles.app}>
@@ -275,12 +333,10 @@ export default function App() {
               <h1 style={styles.amount}>${balance.toFixed(2)}</h1>
               <p>Your recorded reward balance.</p>
             </div>
-
             <div style={styles.card}>
               <h3>Referral Earnings</h3>
               <h2 style={styles.amount}>${referralTotal.toFixed(2)}</h2>
             </div>
-
             <div style={styles.card}>
               <h3>Transaction History</h3>
               {rewards.length === 0 ? (
@@ -299,14 +355,75 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             <button onClick={loadData} style={styles.button}>
               Refresh Wallet
             </button>
           </>
         )}
 
-        {['Withdrawals', 'Activities'].includes(page) && (
+        {page === 'Activities' && (
+          <>
+            <h2>Available Activities</h2>
+            <p>Submit an activity and wait for admin review.</p>
+
+            {activities.length === 0 && !dataLoading && (
+              <div style={styles.card}>
+                No activities are available right now.
+              </div>
+            )}
+
+            {activities.map(activity => {
+              const submission = activityStatus(activity.id);
+
+              return (
+                <div style={styles.card} key={activity.id}>
+                  <h3>{activity.Title}</h3>
+                  <p>{activity.description}</p>
+                  <h3 style={styles.amount}>
+                    ${Number(activity.reward_amount || 0).toFixed(2)}
+                  </h3>
+
+                  {submission?.status === 'approved' ? (
+                    <p style={styles.approved}>Approved</p>
+                  ) : submission?.status === 'pending' ? (
+                    <p style={styles.pending}>Waiting for admin approval</p>
+                  ) : (
+                    <button
+                      style={styles.button}
+                      onClick={() => submitActivity(activity.id)}
+                    >
+                      Submit Activity
+                    </button>
+                  )}
+                </div>
+              );
+            }}
+
+            <div style={styles.card}>
+              <h3>My Activity Submissions</h3>
+              {completions.length === 0 ? (
+                <p>You have not submitted any activities.</p>
+              ) : completions.map(item => {
+                const activity = activities.find(
+                  entry => entry.id === item.activity_id
+                );
+
+                return (
+                  <div key={item.id} style={styles.row}>
+                    <span>{activity?.Title || 'Activity'}</span>
+                    <strong>{item.status}</strong>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={loadData} style={styles.button}>
+              Refresh Activities
+            </button>
+          </>
+        )}
+
+        {['Withdrawals'].includes(page) && (
           <div style={styles.card}>
             <h2>{page}</h2>
             <p>This section is not connected yet.</p>
@@ -366,7 +483,7 @@ const styles = {
   },
   amount: {
     color: '#1768e5',
-    fontSize: 32,
+    fontSize: 28,
     margin: 0
   },
   date: {
@@ -389,6 +506,14 @@ const styles = {
     border: 0,
     borderRadius: 8,
     marginTop: 10
+  },
+  approved: {
+    color: 'green',
+    fontWeight: 'bold'
+  },
+  pending: {
+    color: '#b77900',
+    fontWeight: 'bold'
   },
   error: {
     color: '#a40000',
